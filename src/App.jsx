@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 
 const Card = ({ children, className = "" }) => (
@@ -43,10 +42,12 @@ export default function App() {
   const [items, setItems] = useState([]);
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [unit, setUnit] = useState("kg");
   const [showCart, setShowCart] = useState(false);
   const [search, setSearch] = useState("");
   const [lastDeleted, setLastDeleted] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [searchMessage, setSearchMessage] = useState("");
 
   useEffect(() => {
     try {
@@ -64,90 +65,116 @@ export default function App() {
   const resetForm = () => {
     setName("");
     setQuantity(1);
+    setUnit("kg");
     setEditingId(null);
   };
 
-  const getCategory = (itemName) => {
-    const n = itemName.toLowerCase().trim();
-    const words = n.split(/\s+/);
+  const categories = {
+    "Dairy 🥛": ["milk", "curd", "cheese", "butter", "paneer"],
+    "Staples 🌾": ["rice", "flour", "sugar", "salt", "oil", "atta"],
+    "Vegetables 🥦": ["tomato", "onion", "potato", "carrot"],
+    "Fruits 🍎": ["apple", "banana", "orange", "mango"],
+    "Bakery 🧁": ["cake", "biscuit", "bread", "bun", "cookies"],
+    "Egg & Meat 🍳": [
+      "egg",
+      "eggs",
+      "chicken",
+      "fish",
+      "mutton",
+      "beef",
+      "prawns",
+      "meat",
+      "sausage"
+    ],
+    "Snacks 🍪": ["chips", "nachos", "popcorn"],
+    "Beverages ☕": ["tea", "coffee", "juice"]
+  };
 
-    const categories = {
-      "Dairy 🥛": ["milk", "curd", "cheese", "butter", "yogurt", "paneer", "cream", "ghee"],
-      "Staples 🌾": ["rice", "wheat", "flour", "sugar", "salt", "oil", "atta", "maida", "poha", "oats", "rava", "bread"],
-      "Pulses 🫘": ["dal", "lentil", "gram", "chana", "rajma", "moong", "toor", "urad"],
-      "Vegetables 🥦": ["tomato", "onion", "potato", "spinach", "cabbage", "carrot", "beans", "capsicum", "broccoli", "cauliflower"],
-      "Fruits 🍎": ["apple", "banana", "mango", "orange", "grapes", "watermelon", "papaya", "pineapple", "kiwi"],
-      "Snacks 🍪": ["chips", "biscuit", "cookies", "chocolate", "snack"],
-      "Beverages ☕": ["tea", "coffee", "juice", "cola"]
-    };
+  const getCategory = (itemName) => {
+    const n = itemName.toLowerCase();
 
     for (const [category, keywords] of Object.entries(categories)) {
-      for (const keyword of keywords) {
-        if (n.includes(keyword) || words.some((word) => word.includes(keyword))) {
-          return category;
-        }
+      if (keywords.some((keyword) => n.includes(keyword))) {
+        return category;
       }
     }
 
     return "Other 🍽️";
   };
 
-  const inferUnit = (qty, name) => {
-    const n = name.toLowerCase();
-    const isLiquid = /(milk|oil|water|juice|curd|tea|coffee)/.test(n);
+  useEffect(() => {
+    setItems((prev) =>
+      prev.map((it) => ({
+        ...it,
+        category: getCategory(it.name)
+      }))
+    );
+  }, []);
 
-    const q = Number(qty) || 1;
+  const unitOptions = ["kg", "g", "L", "ml", "packet", "pcs", "dozen"];
 
-    if (q < 50) return isLiquid ? "L" : "kg";
-    return isLiquid ? "ml" : "g";
+  const normalizeText = (text) =>
+    text.toLowerCase().replace(/\s+/g, "").trim();
+
+  const isFuzzyMatch = (itemName, searchText) => {
+    const item = normalizeText(itemName);
+    const searchValue = normalizeText(searchText);
+
+    if (item.includes(searchValue)) return true;
+
+    let matches = 0;
+
+    for (let i = 0; i < searchValue.length; i++) {
+      if (item.includes(searchValue[i])) {
+        matches++;
+      }
+    }
+
+    return matches >= Math.max(2, searchValue.length - 1);
   };
 
   const addOrUpdateItem = () => {
     if (!name.trim()) return;
 
     const qty = Number(quantity) || 1;
-    const normalized = name.toLowerCase().trim();
 
     setItems((prev) => {
       if (editingId) {
         return prev.map((it) =>
           it.id === editingId
-            ? { ...it, name, quantity: qty, unit: inferUnit(qty, name), category: getCategory(name) }
+            ? { ...it, name, quantity: qty, unit, category: getCategory(name) }
             : it
         );
       }
 
       const existing = prev.find(
-        (it) => it.name.toLowerCase().trim() === normalized
+        (it) => it.name.toLowerCase() === name.toLowerCase()
       );
 
       if (existing) {
         return prev.map((it) =>
           it.id === existing.id
-            ? { ...it, quantity: it.quantity + qty, unit: inferUnit(it.quantity + qty, it.name) }
+            ? { ...it, quantity: it.quantity + qty, unit }
             : it
         );
       }
 
-      const newItem = {
-        id: Date.now(),
-        name,
-        category: getCategory(name),
-        quantity: qty,
-        unit: inferUnit(qty, name),
-        purchased: false
-      };
-
-      return [...prev, newItem];
+      return [
+        ...prev,
+        {
+          id: Date.now(),
+          name,
+          quantity: qty,
+          unit,
+          purchased: false,
+          category: getCategory(name)
+        }
+      ];
     });
 
     resetForm();
-  };
-
-  const editItem = (item) => {
-    setName(item.name);
-    setQuantity(Number(item.quantity));
-    setEditingId(item.id);
+    setSearch("");
+    setShowCart(false);
   };
 
   const deleteItem = (id) => {
@@ -162,17 +189,54 @@ export default function App() {
     setLastDeleted(null);
   };
 
+  const editItem = (item) => {
+    setName(item.name);
+    setQuantity(item.quantity);
+    setUnit(item.unit);
+    setEditingId(item.id);
+  };
+
   const togglePurchased = (id) => {
     setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, purchased: !it.purchased } : it))
+      prev.map((it) =>
+        it.id === id ? { ...it, purchased: !it.purchased } : it
+      )
     );
   };
 
   const clearAll = () => setItems([]);
 
-  const filteredItems = items
-    .filter((item) => (search.trim() === "" ? true : item.name.toLowerCase().includes(search.toLowerCase())))
-    .sort((a, b) => a.purchased - b.purchased);
+  const filteredItems = (() => {
+    const q = search.trim();
+
+    if (q === "") return items;
+
+    const norm = normalizeText(q);
+
+    const exact = items.filter(
+      (item) => normalizeText(item.name) === norm
+    );
+
+    if (exact.length > 0) return exact;
+
+    const related = items.filter((item) => {
+      const name = normalizeText(item.name);
+
+      return (
+        name.includes(norm) ||
+        name.startsWith(norm) ||
+        (() => {
+          let score = 0;
+          for (let i = 0; i < norm.length; i++) {
+            if (name.includes(norm[i])) score++;
+          }
+          return score >= Math.max(2, Math.floor(norm.length / 2));
+        })()
+      );
+    });
+
+    return related;
+  })().sort((a, b) => a.purchased - b.purchased);
 
   const grouped = filteredItems.reduce((acc, item) => {
     if (!acc[item.category]) acc[item.category] = [];
@@ -180,24 +244,21 @@ export default function App() {
     return acc;
   }, {});
 
-  const totalCount = items.length;
-
   return (
     <div className="min-h-screen bg-white text-gray-900">
-      <div className="sticky top-0 z-10 bg-white border-b p-3 flex justify-between items-center">
-        <h1 className="text-xl font-bold">Kitchen 👨‍🍳</h1>
-
-        <Button variant="outline" onClick={() => setShowCart(!showCart)} className="relative">
-          🛒
-          {totalCount > 0 && (
-            <span className="absolute -top-2 -right-2 bg-green-600 text-white text-xs rounded-full px-1">
-              {totalCount}
-            </span>
-          )}
-        </Button>
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b p-3">
+        <h1 className="text-2xl font-extrabold text-green-700">KartMate 🛒</h1>
+        <p className="text-xs text-gray-500">Never forget groceries again</p>
       </div>
 
       <div className="p-3 max-w-4xl mx-auto space-y-4">
+        <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-3xl p-6 shadow-lg">
+          <h2 className="text-2xl font-bold mb-2">Smart Grocery Reminder</h2>
+          <p className="text-sm opacity-90 leading-relaxed">
+            Add items whenever you remember them and access your shopping list anytime.
+          </p>
+        </div>
+
         {lastDeleted && (
           <div className="flex items-center justify-between bg-gray-100 border rounded-lg px-3 py-2">
             <span className="text-sm">Item deleted</span>
@@ -211,74 +272,145 @@ export default function App() {
               {editingId ? "Edit Item" : "Add Item"}
             </h2>
 
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center flex-wrap">
               <Input
                 placeholder="e.g. Milk, Rice, Tomato"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setSearch("");
+                  setSearchMessage("");
+                  setShowCart(false);
+                }}
               />
 
               <Input
                 type="number"
-                placeholder="1"
                 value={quantity}
                 onChange={(e) => setQuantity(Number(e.target.value))}
-                className="w-16"
+                className="w-20"
               />
 
-              <Button onClick={addOrUpdateItem} className="bg-green-600 text-white hover:bg-green-700">
-                {editingId ? "✏️" : "➕"}
-              </Button>
+              <select
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                {unitOptions.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+
+              <Button onClick={addOrUpdateItem}>➕</Button>
             </div>
 
             <Input
               placeholder="Search items..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setSearchMessage("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const query = search.trim();
+
+                  if (!query) {
+                    setShowCart(true);
+                    setSearchMessage("");
+                    return;
+                  }
+
+                  const hasMatch = items.some((item) => {
+                    const name = item.name.toLowerCase();
+                    const q = query.toLowerCase();
+
+                    return (
+                      name === q ||
+                      name.includes(q) ||
+                      isFuzzyMatch(item.name, query)
+                    );
+                  });
+
+                  if (!hasMatch) {
+                    setSearchMessage(`No item found for "${query}" 🔍`);
+                    setShowCart(false);
+                  } else {
+                    setSearchMessage("");
+                    setShowCart(true);
+                  }
+                }
+              }}
               className="mt-3"
             />
+
+            {searchMessage && (
+              <div className="mt-3 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-xl text-sm">
+                {searchMessage}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        <div>
-          <h2 className="text-lg font-semibold mb-3">🛒 Shopping List</h2>
+        <div
+          className="flex items-center justify-between mb-3 bg-green-50 border border-green-200 rounded-2xl px-4 py-3 cursor-pointer hover:bg-green-100 transition"
+          onClick={() => {
+            setShowCart(!showCart);
+            setSearch("");
+            setSearchMessage("");
+          }}
+        >
+          <div>
+            <h2 className="text-lg font-bold text-green-700">🛒 Shopping List</h2>
+            <p className="text-xs text-gray-500">
+              Tap here to {showCart ? "hide" : "view"} your shopping items
+            </p>
+          </div>
 
-          {showCart && (
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                {items.length > 0 && (
-                  <Button size="sm" variant="destructive" onClick={clearAll}>Clear</Button>
-                )}
-              </div>
+          <span className="bg-green-600 text-white text-sm rounded-full px-3 py-1 font-semibold">
+            {items.length}
+          </span>
+        </div>
 
-              {items.length === 0 && <p className="text-sm text-gray-500">Cart is empty 🛒</p>}
+        {showCart && (
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              {items.length > 0 && (
+                <Button size="sm" variant="destructive" onClick={clearAll}>Clear</Button>
+              )}
+            </div>
 
-              {Object.keys(grouped).map((cat) => (
-                <Card key={cat}>
-                  <CardContent className="p-3">
-                    <h3 className="font-bold text-sm mb-2">{cat}</h3>
+            {items.length === 0 && (
+              <p className="text-sm text-gray-500">Cart is empty 🛒</p>
+            )}
 
-                    <div className="space-y-2">
-                      {grouped[cat].map((item) => (
-                        <div key={item.id} className="flex justify-between items-center border rounded p-2">
-                          <span className={`text-sm ${item.purchased ? "line-through opacity-60" : ""}`}>
-                            {item.name} ({item.quantity})
-                          </span>
-
+            {Object.keys(grouped).map((cat) => (
+              <Card key={cat}>
+                <CardContent className="p-3">
+                  <h3 className="font-bold text-sm mb-2">{cat}</h3>
+                  <div className="space-y-3">
+                    {grouped[cat].map((item) => (
+                      <div key={item.id} className="rounded-2xl border p-4 shadow-sm">
+                        <div className="flex justify-between">
+                          <div>
+                            <p>{item.name}</p>
+                            <p className="text-xs text-gray-500">Qty: {item.quantity} {item.unit}</p>
+                          </div>
                           <div className="flex gap-2">
                             <Button size="sm" variant="outline" onClick={() => editItem(item)}>✏️</Button>
-                            <Button size="sm" onClick={() => togglePurchased(item.id)}>✔</Button>
                             <Button size="sm" variant="ghost" onClick={() => deleteItem(item.id)}>🗑️</Button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
