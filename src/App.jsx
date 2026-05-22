@@ -105,7 +105,7 @@ export default function App() {
   const categories = {
     "Dairy 🥛": ["milk", "curd", "cheese", "butter", "paneer"],
     "Staples 🌾": ["rice", "flour", "sugar", "salt", "oil", "atta"],
-    "Vegetables 🥦": ["tomato", "onion", "potato", "carrot"],
+    "Vegetables 🥦": ["tomato", "onion", "potato", "carrot", "broccoli", "spinach", "cabbage", "cauliflower", "beans", "peas", "capsicum", "cucumber", "garlic", "ginger"],
     "Fruits 🍎": ["apple", "banana", "orange", "mango"],
     "Bakery 🧁": ["cake", "biscuit", "bread", "bun", "cookies"],
     "Egg & Meat 🍳": ["egg","eggs","chicken","fish","mutton","beef","prawns","meat","sausage"],
@@ -115,10 +115,17 @@ export default function App() {
   };
 
   const getCategory = (itemName) => {
-    const n = itemName.toLowerCase();
+    const n = normalizeText(itemName);
+
     for (const [category, keywords] of Object.entries(categories)) {
-      if (keywords.some((keyword) => n.includes(keyword))) return category;
+      for (const keyword of keywords) {
+        const k = normalizeText(keyword);
+
+        if (n === k) return category;
+        if (n.includes(k) || k.includes(n)) return category;
+      }
     }
+
     return "Other 🍽️";
   };
 
@@ -150,7 +157,7 @@ export default function App() {
         return prev.map((it) => it.id === editingId ? { ...it, name, quantity: qty, unit, category: getCategory(name) } : it);
       }
 
-      const existing = prev.find((it) => it.name.toLowerCase() === name.toLowerCase());
+      const existing = prev.find((it) => normalizeText(it.name) === normalizeText(name));
       if (existing) {
         return prev.map((it) => it.id === existing.id ? { ...it, quantity: it.quantity + qty, unit } : it);
       }
@@ -209,7 +216,7 @@ export default function App() {
 
       {/* Header */}
       <div className="sticky top-0 z-20 bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 shadow-lg">
-        <h1 className="text-2xl font-extrabold">🛒 KartMate</h1>
+        <h1 className="text-2xl font-extrabold">🛒 QuickCart</h1>
         <p className="text-xs opacity-90">Your smart grocery companion</p>
 
         {deferredPrompt && (
